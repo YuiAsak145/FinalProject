@@ -1,0 +1,642 @@
+#include <iostream>
+#include <string>
+#include <vector>
+#include <unordered_map>
+#include <queue>
+#include <algorithm>
+#include <limits>
+
+using namespace std;
+
+class CourseInfo {
+public:
+	string classIdentifier;
+	string courseName;
+	string courseDescription;
+	vector<string> prereqs;
+};
+
+unordered_map<string, CourseInfo> courses;
+
+bool linearSearch(const vector<string>& list, const string& classIdentifier) {
+	for (const string& identifier : list) {
+		if (identifier == classIdentifier) {
+			return true;
+		}
+	}
+	return false;
+}
+
+vector<string> remainingCourses(const vector<string>& required, const vector<string>& finished) {
+	vector<string> remaining;
+	for (const string& classIdentifier : required) {
+		if (!linearSearch(finished, classIdentifier)) {
+			remaining.push_back(classIdentifier);
+		}
+	}
+	return remaining;
+}
+
+vector<string> missingReqs(const string& courseCode, const vector<string>& finished) {
+	vector<string> missing;
+	auto it = courses.find(courseCode);
+	if (it == courses.end()) {
+		return missing;
+	}
+	const CourseInfo& course = it->second;
+	for (const string& prereq : course.prereqs) {
+		if (!linearSearch(finished, prereq)) {
+			missing.push_back(prereq);
+		}
+	}
+	return missing;
+}
+
+void descriptionCourse(const string& courseCode) {
+	auto it = courses.find(courseCode);
+	if (it == courses.end()) {
+		cout << "Course not found." << endl;
+		return;
+	}
+	const CourseInfo& course = it->second;
+	cout << "Course: " << course.courseName << endl;
+	cout << "Description: " << course.courseDescription << endl;
+
+	if (course.prereqs.empty()) {
+		cout << "No prerequisites." << endl;
+	}
+	else {
+		cout << "Prerequisites: ";
+		for (size_t i = 0; i < course.prereqs.size(); ++i) {
+			cout << course.prereqs[i];
+			if (i + 1 < course.prereqs.size()) {
+				cout << ", ";
+			}
+		}
+		cout << "\n";
+	}
+}
+
+vector<string> completedCourseInput() {
+	int num;
+	cout << "\nHow many courses have you completed? ";
+	cin >> num;
+
+	cin.ignore(numeric_limits<streamsize>::max(), '\n');
+
+	vector<string> finished;
+	finished.reserve(num);
+
+	for (int i = 0; i < num; ++i) {
+		string code;
+		cout << "Enter completed course #" << (i + 1) << " (EX: CS 210, MATH 254...): ";
+		getline(cin, code);
+
+		if (courses.find(code) == courses.end()) {
+			cout << "  (Warning: " << code << " is not in the catalog.)\n";
+		}
+		finished.push_back(code);
+	}
+
+	return finished;
+}
+
+vector<string> TopologicalSort(const vector<string>& neededCourses) {
+	unordered_map<string, vector<string>> adj;
+	unordered_map<string, int> indegree;
+
+
+	for (const string& classIdentifier : neededCourses) {
+		indegree[classIdentifier] = 0;
+		adj[classIdentifier] = {};
+	}
+
+
+	for (const string& classIdentifier : neededCourses) {
+		auto it = courses.find(classIdentifier);
+		if (it == courses.end()) continue;
+		const CourseInfo& course = it->second;
+		for (const string& prereq : course.prereqs) {
+			if (indegree.find(prereq) != indegree.end()) {
+				adj[prereq].push_back(classIdentifier);
+				indegree[classIdentifier]++;
+			}
+		}
+	}
+
+
+	queue<string> q;
+	for (const auto& pair : indegree) {
+		if (pair.second == 0) {
+			q.push(pair.first);
+		}
+	}
+
+	vector<string> order;
+	while (!q.empty()) {
+		string cur = q.front();
+		q.pop();
+		order.push_back(cur);
+
+		for (const string& next : adj[cur]) {
+			indegree[next]--;
+			if (indegree[next] == 0) {
+				q.push(next);
+			}
+		}
+	}
+	if (order.size() != indegree.size()) {
+		cout << "cycling = very bad";
+	}
+	return order;
+}
+
+struct treeNode {
+	string name;
+	vector<treeNode*> branches;
+};
+
+void courseTree(treeNode* node, int depth = 0) {
+	if (!node) return;
+
+	for (int i = 0; i < depth; ++i) {
+		cout << " ";
+	}
+	if (node->branches.empty()) {
+		cout << "- " << node->name << "\n";
+	}
+	else {
+		cout << node->name << "\n";
+
+		if (depth == 1) {
+			cout << "\n";
+		}
+	}
+	for (treeNode* leaf : node->branches) {
+		courseTree(leaf, depth + 1);
+	}
+}
+
+treeNode* forest(const vector<string>& majorPrep, const vector<string>& majorCores, const vector<string>& majorElectives) {
+	treeNode* root = new treeNode{ "Comp Sci Requirements Course", {} };
+	treeNode* prepNode = new treeNode{ "Major Prep", {} };
+	treeNode* coreNode = new treeNode{ "Major Cores", {} };
+	treeNode* electiveNode = new treeNode{ "Major Electives", {} };
+
+	for (const string& code : majorPrep) {
+		prepNode->branches.push_back(new treeNode{ code, {} });
+	}
+	for (const string& code : majorCores) {
+		coreNode->branches.push_back(new treeNode{ code, {} });
+	}
+	for (const string& code : majorElectives) {
+		electiveNode->branches.push_back(new treeNode{ code, {} });
+	}
+
+	root->branches.push_back(prepNode);
+	root->branches.push_back(coreNode);
+	root->branches.push_back(electiveNode);
+	return root;
+}
+
+int main() {
+
+	courses["CS 150"] = {
+		"CS 150(3 Units)",
+		"Introductory Computer Programming",
+		"Computing methodology, process, and computational problem solving. Algorithm Design; program design, development, and testing.",
+		{"CS 150L"}
+	};
+	courses["CS 150L"] = {
+		"CS 150L(1 Unit)",
+		"Introductory Computer Programming Laboratory",
+		"Programming experiences designed to demonstrate and reinforce concepts through active experimentation and programming exercises.",
+		{}
+	};
+	courses["CS 160"] = {
+		"CS 160(3 Units)",
+		"Intermediate Computer Programming",
+		"Advanced computing methodology, process, and computational problem solving. Programming environment and data structures. Object-oriented program design and development. Binary trees, linear lists, maps, queues, recursion, stacks.",
+		{"CS 150","CS 160L"}
+	};
+	courses["CS 160L"] = {
+		"CS 160L(1 Unit)",
+		"Intermediate Computer Programming Laboratory",
+		"Programming experiences designed to demonstrate and reinforce concepts through active experimentation and programming exercises.",
+		{"CS 150"}
+	};
+	courses["CS 210"] = {
+		"CS 210(3 Units)",
+		"Data Structures",
+		"Representations and operations on basic data structures. Arrays, linked lists, stacks, queues, and recursion; binary search trees and balanced trees; hash tables, dynamic storage management; introduction to graphs. An object oriented programming language will be used.",
+		{"CS 160"}
+	};
+	courses["CS 240"] = {
+		"CS 240(3 Units)",
+		"Computer Organization",
+		"Organization and assembly language to include CPU, logic circuits, and memory. Data representation, interrupts, looping and addressing techniques, macros, and traps.",
+		{"CS 160"}
+	};
+	courses["CS 250"] = {
+		"CS 250(3 Units)",
+		"Introduction to Software Systems",
+		"Alternatives analyses, information management, networking and communications, parallel and distributed processing, principles and practices, security and encryption. Ethical, legal, and social issues in computing. Modeling will be used to capture and explore designs.",
+		{"CS 240"}
+	};
+	courses["MATH 150"] = {
+		"MATH 150(4 Units)",
+		"Calculus I",
+		"Algebraic and transcendental functions. Continuity and limits. The derivative and its applications. The integral and the fundamental theorem of calculus.",
+		{}
+	};
+	courses["MATH 151"] = {
+		"MATH 151(4 Units)",
+		"Calculus II",
+		"Techniques and applications of integration. Improper integrals. Differential equations. Infinite series. Conic sections. Curves in parametric form, polar coordinates.",
+		{"MATH 150"}
+	};
+	courses["MATH 245"] = {
+		"MATH 245(3 Units)",
+		"Discrete Mathematics",
+		"Logic, methods of proof, set theory, number theory, equivalence and order relations, counting (combinations and permutations), solving recurrence relations.",
+		{"MATH 150"}
+	};
+	courses["MATH 254"] = {
+		"MATH 254(3 Units)",
+		"Introduction to Linear Algebra",
+		"Matrix algebra, Gaussian elimination, determinants, vector spaces, linear transformations, orthogonality, eigenvalues, and eigenvectors.",
+		{"MATH 151"}
+	};
+	courses["PHYS 195"] = {
+		"PHYS 195(3 Units)",
+		"Principles of Physics",
+		"Fundamental principles of physics in areas of mechanics and oscillatory motion. Designed for students requiring calculus-based physics.",
+		{"MATH 150","PHYS 195L"}
+	};
+	courses["PHYS 195L"] = {
+		"PHYS 195L(1 Unit)",
+		"Principles of Physics Laboratory",
+		"Experiments in mechanics, wave motion, resonance phenomena using precision air tracks.",
+		{}
+	};
+	courses["PHYS 196"] = {
+		"PHYS 196(3 Units)",
+		"Principles of Physics",
+		"Fundamental principles of physics in areas of electricity and magnetism. Designed for students requiring calculus-based physics.",
+		{"PHYS 195","MATH 151"}
+	};
+	courses["PHYS 196L"] = {
+		"PHYS 196L(1 Unit)",
+		"Principles of Physics Laboratory",
+		"Experiments in DC circuits, AC circuits, electrical resonance, oscilloscope measurement techniques, and electric and magnetic fields.",
+		{"PHYS 196"}
+	};
+	courses["STAT 250"] = {
+		"STAT 250(3 Units)",
+		"Statistical Principles and Practices",
+		"Descriptive statistics, data displays, measures of central tendency and variability, random variables, sampling distribution. Estimation and hypothesis tests for means and proportions, linear regression and correlation.",
+		{}
+	};
+	courses["CS 370"] = {
+		"CS 370(3 Units)",
+		"Computer Architecture",
+		"Logic gates, combinational circuits, sequential circuits, memory and bus system, control unit, CPU, exception processing, traps and interrupts, input-output and communication, reduced instruction set computers, use of simulators for analysis and design of computer circuits, and traps/interrupts.",
+		{"CS 240"}
+	};
+	courses["CS 450"] = {
+		"CS 450(3 Units)",
+		"Introduction to Artificial Intelligence",
+		"First-order logic. Heuristic and uninformed search. Deep neural networks, hierarchical clustering, k-means, linear regression, support vector machines. Image classification and object tracking. Language models, parsing, speech generation.",
+		{"CS 210","MATH 254", "STAT 250"}
+	};
+	courses["CS 460"] = {
+		"CS 460(3 Units)",
+		"Algorithms",
+		"Algorithms for solving frequently occurring problems. Analysis techniques, divide and conquer algorithms with applications, graph problems, greedy algorithms. Introduction to NP complete problems.",
+		{"CS 210","MATH 245"}
+	};
+	courses["CS 480"] = {
+		"CS 480(3 Units)",
+		"Operating Systems",
+		"File system, I/O management, interprocess communication, memory management, processes and threads, program structures, thread synchronization, virtual memory.",
+		{"CS 210","CS 370"}
+	};
+	courses["CS 420"] = {
+		"CS 420(3 Units)",
+		"Advanced Programming Languages",
+		"Concurrent programming, logic programming, object-oriented programming. Implementation issues.",
+		{"CS 210"}
+	};
+	courses["STAT 550"] = {
+		"STAT 550(3 Units)",
+		"Applied Probability",
+		"Computation of probabilities via enumeration and simulation, discrete and continuous distributions, moments of random variables. Markov chains, counting and queuing processes, and selected topics.",
+		{"MATH 151","MATH 254"}
+	};
+	courses["CS 470"] = {
+		"CS 470(3 Units)",
+		"UNIX System Administration",
+		"Installing the UNIX operating system on a UNIX workstation, adding user accounts, backing up and restoring user files, installing windows, adding network capabilities, adding printers and other peripherals.",
+		{"CS 370"}
+	};
+	courses["CS 530"] = {
+		"CS 530(3 Units)",
+		"Systems Programming",
+		"Design and implementation of system software. Relationship between software design and machine architecture. Assemblers, compilers, debuggers, editors, linkers and loaders, macro processors. Object oriented concepts and programming fundamentals.",
+		{"CS 210","CS 240"}
+	};
+	courses["CS 532"] = {
+		"CS 532(3 Units)",
+		"Software Engineering",
+		"Theory and methodology of programming complex computer software. Analysis, design, and implementation of programs. Team projects required.",
+		{"CS 250"}
+	};
+	courses["CS 545"] = {
+		"CS 545(3 Units)",
+		"Introduction to Web Application Development",
+		"World Wide Web application development. Client-side and server-side scripting, CSS, Javascript, PHP and CGI programming with Perl, XHTML. Application integration with SQL database systems.",
+		{"CS 210"}
+	};
+	courses["CS 562"] = {
+		"CS 562(3 Units)",
+		"Automata Theory",
+		"Definition of finite automata. Classification of finite automaton definable languages. Minimization of finite automata. Nondeterministic finite automata. Sequential machines with output. Regular sets and expressions. Introduction to grammars.",
+		{"MATH 254"}
+	};
+	courses["CS 572"] = {
+		"CS 572(3 Units)",
+		"Microprocessor Architecture",
+		"Architecture of state-of-the-art microprocessor. Internal pipeline, internal cache, external cache, and memory management. Programming a uniprocessor. Communication among computers in a distributed environment. Architecture and programming of a multiprocessor system.",
+		{"CS 370"}
+	};
+	courses["CS 574"] = {
+		"CS 574(3 Units)",
+		"Computer Security",
+		"Principles of computer security and application of principles to operating systems, database systems, and computer networks. Topics include encryption techniques, access controls, and information flow controls.",
+		{"CS 480", "MATH 245"}
+	};
+	courses["CS 576"] = {
+		"CS 576(3 Units)",
+		"Computer Networks and Distributed Systems",
+		"Basic networking concepts to include seven-layer reference model, transmission media, addressing, subnetting and supernetting, networking devices, LANs and WANs, internetworking, distributed processing, and client-server model. Basic concepts and protocols of TCP/IP protocol suite and basic Internet services.",
+		{"CS 480"}
+	};
+	courses["CS 578"] = {
+		"CS 578(3 Units)",
+		"Wireless Networks",
+		"Current and future protocols, fundamental theories, low power Internet of things and wireless sensor networks.",
+		{"CS 210"}
+	};
+	courses["CS 549"] = {
+		"CS 549(3 Units)",
+		"Machine Learning",
+		"Algorithms and computer methods for machine learning. Supervised methods: convolutional neural networks, feedforward neural networks, linear regression, logistic regression, support vector machine; unsupervised methods: dimensionality reduction, k-means clustering, subspace learning. Applications in classification, regression and visualization.",
+		{"CS 210", "MATH 254"}
+	};
+	courses["CS 553"] = {
+		"CS 553(3 Units)",
+		"Neural Networks",
+		"Computer algorithms and methods for neural networks. Convolutional networks, feedforward networks, generative adversarial networks, graphical neural networks, recurrent neural networks; backward propagation, computational graph, regularization, stochastic gradient descent; autoencoder networks and deep structure models.",
+		{"CS 210","MATH 254"}
+	};
+	courses["CS 556"] = {
+		"CS 556(3 Units)",
+		"Robotics",
+		"Robotic systems and their components. Spatial descriptions and transformations. Kinematics and inverse kinematics of robots. Robotic programming and simulation environments to include Matlab Robotics Toolbox. Mobile robots. Trajectory tracking and control. Path planning.",
+		{"CS 450","MATH 254"}
+	};
+	courses["CS 559"] = {
+		"CS 559(3 Units)",
+		"Computer Vision",
+		"Algorithms and computer methods for processing of images, edge detection and filtering in spatial domain, FFT and filtering, frequency domain analysis of images, image compression, low level image processing, neighborhood operations, segmentation.",
+		{"CS 210", "MATH 254"}
+	};
+	courses["CS 561"] = {
+		"CS 561(3 Units)",
+		"Deep Learning for Natural Language Processing",
+		"Approaches on deep neural networks. Common tasks, modern programming frameworks, and state-of-the-art models.",
+		{"CS 450"}
+	};
+	courses["CS 583"] = {
+		"CS 583(3 Units)",
+		"3D Game Programming",
+		"Development of programming skills using software environment of a game engine and its scripting language. 3D concepts for game play, modeling, and programming. Roles needed in software development team. Contrast creation of original 3D object models for game world with incorporation of pre-created generic models.",
+		{"CS 210"}
+	};
+	courses["CS 503"] = {
+		"CS 503(3 Units)",
+		"Scientific Database Techniques",
+		"Fundamental data models for handling scientific data, including flat file, indexed compressed files, relational databases, and object oriented databases, and their associated query technologies; e.g. file formats, input/output libraries, string searching, structured query language, object-oriented structured query language, hypertext markup language/common gateway interface, and other specialized interfaces. Designed for computational science students.",
+		{"CS 210","MATH 245"}
+	};
+	courses["CS 514"] = {
+		"CS 514(3 Units)",
+		"Database Theory and Implementation",
+		"Database systems architecture. Storage structures and access techniques. Relational model, relational algebra and calculus, normalization of relations, hierarchical and network models. Current database systems.",
+		{"CS 210", "MATH 245"}
+	};
+	courses["CS 558"] = {
+		"CS 558(3 Units)",
+		"Computer Simulation",
+		"Methodology of simulation for discrete and continuous dynamic systems. State-of-the-art programming techniques and languages. Statistical aspects of simulation. Students will design, program, execute, and document a simulation of their choice.",
+		{"CS 210", "STAT 550"}
+	};
+	courses["CS 577"] = {
+		"CS 577(3 Units)",
+		"Principles and Techniques of Data Science",
+		"Data classification, cleaning, common representation and operations, dimensionality reduction, hypothesis testing, life cycle, regression, statistical inference, and visualization.",
+		{"CS 210", "MATH 254", "STAT 250"}
+	};
+	courses["CS 581"] = {
+		"CS 581(3 Units)",
+		"Computational Linguistics",
+		"Basic concepts in computational linguistics including finite-state transducers, n-gram language models, vector space semantics, statistical classifiers, neural nets, and transformers. Applications to parsing, natural language understanding, and large language models.",
+		{"CS 420"}
+	};
+	courses["CS 582"] = {
+		"CS 582(3 Units)",
+		"Introduction to Speech Processing",
+		"Fundamentals of speech processing and speech recognition. Physical aspects of speech production and perception. Mathematical models for speech recognition. Corpus development: data collection, processing, and evaluation. Applications of speech processing and associated research topics.",
+		{"CS 210"}
+	};
+	courses["CS 496"] = {
+		"CS 496(1-4 Units)",
+		"Experimental Topics",
+		"Selected topics.",
+		{}
+	};
+	courses["CS 497"] = {
+		"CS 497(3 Units)",
+		"Undergraduate Research Seminar",
+		"Designing and carrying out independent research in one of the areas of computer science. Literature search, technical report writing, and oral presentation of results.",
+		{"CS 460","CS 480"}
+	};
+	courses["CS 498"] = {
+		"CS 498(3 Units)",
+		"Undergraduate Honors Thesis",
+		"Directed research in computer science and completion of honors thesis. Thesis to be presented at the annual SDSU Research Symposium and/or defended before a committee of faculty.",
+		{"CS 497"}
+	};
+	courses["CS 499"] = {
+		"CS 499(1-3 Units)",
+		"Special Study",
+		"Individual study",
+		{}
+	};
+	courses["CS 596"] = {
+		"CS 596(1-4 Units)",
+		"Advanced Topics in Computer Science",
+		"Selected topics in computer science.",
+		{}
+	};
+
+	vector<string> majorPrep = {
+		"CS 150",
+		"CS 150L",
+		"CS 160",
+		"CS 160L",
+		"CS 210",
+		"CS 240",
+		"CS 250",
+		"MATH 150",
+		"MATH 151",
+		"MATH 245",
+		"MATH 254",
+		"PHYS 195",
+		"PHYS 195L",
+		"PHYS 196",
+		"PHYS 196L",
+		"STAT 250"
+	};
+	vector<string> majorCores = {
+
+		"CS 370",
+		"CS 450",
+		"CS 460",
+		"CS 480",
+		"CS 420",
+		"STAT 550"
+	};
+	vector<string> majorElectives = {
+		
+		"CS 470",
+		"CS 530",
+		"CS 532",
+		"CS 545",
+		"CS 562",
+		"CS 572",
+		"CS 574",
+		"CS 576",
+		"CS 578",
+		"CS 549",
+		"CS 553",
+		"CS 556",
+		"CS 559",
+		"CS 561",
+		"CS 583",
+		"CS 503",
+		"CS 514",
+		"CS 558",
+		"CS 577",
+		"CS 581",
+		"CS 582",
+		"CS 496",
+		"CS 497",
+		"CS 498",
+		"CS 499",
+		"CS 596"
+	};
+	treeNode* root = forest(majorPrep, majorCores, majorElectives);
+	cout << "\nRequirement Courses\n";
+	cout << "______________________\n";
+	courseTree(root);
+	cout << "      Course Audit        \n";
+	cout << "-------------------------\n";
+	cout << "    Loaded " << courses.size() << " courses.\n";
+
+	cout << "\n Course Catalog \n" << endl;
+	for (const auto& p : courses) {
+		const CourseInfo& c = p.second;
+		cout << c.classIdentifier << ": " << c.courseName << endl << "\n";
+	}
+	vector<string> finished = completedCourseInput();
+
+	vector<string> remainingMajorPrep = remainingCourses(majorPrep, finished);
+	vector<string> remainingMajorCores = remainingCourses(majorCores, finished);
+	vector<string> remainingMajorElectives = remainingCourses(majorElectives, finished);
+
+	sort(remainingMajorPrep.begin(), remainingMajorPrep.end());
+	sort(remainingMajorCores.begin(), remainingMajorCores.end());
+	sort(remainingMajorElectives.begin(), remainingMajorElectives.end());
+
+	cout << "\n Remaining Major Prep Courses \n";
+	if (remainingMajorPrep.empty()) {
+		cout << " All Major Prep Courses are Completed\n";
+
+	}
+	else {
+		for (const string& code : remainingMajorPrep) {
+			cout << code << " -> " << courses[code].courseName << "\n";
+		}
+	}
+
+	cout << "\n Remaining Major Core Courses \n";
+	if (remainingMajorCores.empty()) {
+		cout << " All Major Core Courses are Completed\n";
+
+	}
+	else {
+		for (const string& code : remainingMajorCores) {
+			cout << code << " -> " << courses[code].courseName << "\n";
+		}
+	}
+
+	cout << "\n Remaining Major Electives Courses \n";
+	if (remainingMajorElectives.empty()) {
+		cout << " All Major Electives Courses are Completed\n";
+
+	}
+	else {
+		for (const string& code : remainingMajorElectives) {
+			cout << code << " -> " << courses[code].courseName << "\n";
+		}
+	}
+
+	vector<string> remainingAll;
+
+	auto addUnique = [&](const vector<string>& src) {
+		for (const string& code : src) {
+			if (!linearSearch(remainingAll, code)) {
+				remainingAll.push_back(code);
+			}
+		}
+		};
+	addUnique(remainingMajorPrep);
+	addUnique(remainingMajorCores);
+	addUnique(remainingMajorElectives);
+
+	cout << "\n Remaining Courses you gotta take\n";
+	cout << "_____________________________________\n";
+	if (remainingAll.empty()) {
+		cout << "You got your degree now";
+	}
+	else {
+		vector<string> order = TopologicalSort(remainingAll);
+		for (const string& code : order) {
+			cout << code << " = " << courses[code].courseName;
+
+			vector<string> MIA = missingReqs(code, finished);
+			if (!MIA.empty()) {
+				cout << " (prereqs needed: ";
+				for (size_t i = 0; i < MIA.size(); ++i) {
+					cout << MIA[i];
+					if (i + 1 < MIA.size()) cout << ": ";
+				}
+				cout << ")";
+			}
+			cout << "\n";
+		}
+	}
+	return 0;
+}
+
